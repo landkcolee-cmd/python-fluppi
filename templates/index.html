@@ -6,75 +6,176 @@
     <style>
         body { font-family: sans-serif; padding: 20px; }
         h1, h2 { color: #333; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
         th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
         th { background-color: #f0f0f0; }
         .warning { color: red; font-weight: bold; }
-        form { margin-bottom: 30px; }
-        input { padding: 6px; margin: 4px; }
-        button { padding: 6px 16px; background-color: #4a90d9; color: white; border: none; cursor: pointer; }
+        .count-input { width: 50px; padding: 4px; text-align: center; }
+        .btn-add { padding: 4px 10px; background-color: #4a90d9; color: white; border: none; cursor: pointer; }
+        .btn-reduce { padding: 4px 10px; background-color: #e05c5c; color: white; border: none; cursor: pointer; }
+        .search-form { margin-bottom: 20px; }
+        .search-form input { padding: 4px; }
+        .search-form button { padding: 6px 14px; cursor: pointer; }
+        .filter-table { border-collapse: collapse; }
+        .filter-table th { background: #f0f0f0; padding: 6px 10px; text-align: left; white-space: nowrap; }
+        .filter-table td { padding: 6px 10px; }
+        .flash { color: green; font-weight: bold; }
+        /* 整列できる列のヘッダー */
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background-color: #ddd; }
+        th.sortable::after { content: " ↕"; color: #999; }
+        th.sort-asc::after  { content: " ▲"; color: #333; }
+        th.sort-desc::after { content: " ▼"; color: #333; }
     </style>
 </head>
 <body>
     <h1>Fluppi 在庫管理</h1>
 
-    <!-- 検索フォーム -->
-    <form method="GET" action="/">
-        <input type="text" name="q" placeholder="商品名・カラーで検索" value="{{ query }}">
-        <button type="submit">検索</button>
-        <a href="/">クリア</a>
+    <!-- 検索・フィルターフォーム -->
+    <form class="search-form" method="GET" action="/">
+        <table class="filter-table">
+            <tr>
+                <th>カラー</th>
+                <td>
+                    <select name="color">
+                        <option value="">すべて</option>
+                        {% for color in all_colors %}
+                        <option value="{{ color }}" {% if selected_color == color %}selected{% endif %}>{{ color }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <th>サイズ</th>
+                <td>
+                    {% for size in all_sizes %}
+                    <label style="margin-right:8px;">
+                        <input type="checkbox" name="size" value="{{ size }}"
+                               {% if size in selected_sizes %}checked{% endif %}>
+                        {{ size }}
+                    </label>
+                    {% endfor %}
+                </td>
+                <th>在庫数</th>
+                <td>
+                    <input type="number" name="min" placeholder="以上" min="0" style="width:60px" value="{{ min_val }}"> 以上
+                    <input type="number" name="max" placeholder="以下" min="0" style="width:60px" value="{{ max_val }}"> 以下
+                    <label style="margin-left:8px;">
+                        <input type="checkbox" name="reorder" {% if reorder %}checked{% endif %}>
+                        再発注のみ(3以下)
+                    </label>
+                </td>
+                <td>
+                    <button type="submit">絞り込む</button>
+                    <a href="/">クリア</a>
+                </td>
+            </tr>
+        </table>
     </form>
 
-    <!-- 在庫一覧テーブル -->
-    <h2>在庫一覧{% if query %} 「{{ query }}」の検索結果{% endif %}</h2>
-    <table>
-        <tr>
-            <th>商品</th>
-            <th>カラー</th>
-            <th>サイズ</th>
-            <th>在庫</th>
-        </tr>
-        {% for row in inventory %}
-        <tr>
-            <td>{{ row.product }}</td>
-            <td>{{ row.color }}</td>
-            <td>{{ row.size }}</td>
-            <td>
-                {{ row.stock }}
-                {% if row.stock | int <= 3 %}
-                <span class="warning">⚠ 再発注が必要です</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-
-    <!-- 在庫追加フォーム -->
-    <h2>在庫を追加する</h2>
-    <form method="POST" action="/add">
-        <input type="text" name="product" placeholder="商品名" required>
-        <input type="text" name="color" placeholder="カラー" required>
-        <input type="text" name="size" placeholder="サイズ" required>
-        <input type="number" name="count" placeholder="追加する数" min="1" required>
-        <button type="submit">追加する</button>
-    </form>
-
-    <!-- 在庫減算フォーム -->
-    <h2>在庫を減らす(販売)</h2>
-    <form method="POST" action="/reduce">
-        <input type="text" name="product" placeholder="商品名" required>
-        <input type="text" name="color" placeholder="カラー" required>
-        <input type="text" name="size" placeholder="サイズ" required>
-        <input type="number" name="count" placeholder="販売した数" min="1" required>
-        <button type="submit" style="background-color: #e05c5c;">減らす</button>
-    </form>
-
-    <!-- フラッシュメッセージ(操作結果の表示) -->
+    <!-- フラッシュメッセージ -->
     {% with messages = get_flashed_messages() %}
     {% if messages %}
-        <p style="color: green;">{{ messages[0] }}</p>
+        <p class="flash">{{ messages[0] }}</p>
     {% endif %}
     {% endwith %}
 
+    <!-- 在庫一覧テーブル -->
+    <h2>在庫一覧</h2>
+    <table id="inventory-table">
+        <thead>
+            <tr>
+                <th class="sortable" data-col="0" data-type="str">カラー</th>
+                <th class="sortable" data-col="1" data-type="num">サイズ</th>
+                <th class="sortable" data-col="2" data-type="num">在庫</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in inventory %}
+            <tr>
+                <td>{{ row.color }}</td>
+                <td>{{ row.size }}</td>
+                <!-- data-value に数値だけ持たせてJSが正しく並び替えられるようにする -->
+                <td data-value="{{ row.stock }}">
+                    {{ row.stock }}
+                    {% if row.stock | int <= 3 %}
+                    <span class="warning">⚠ 再発注</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" style="display:inline">
+                        <input type="hidden" name="product" value="{{ row.product }}">
+                        <input type="hidden" name="color" value="{{ row.color }}">
+                        <input type="hidden" name="size" value="{{ row.size }}">
+                        <input class="count-input" type="number" name="count" value="1" min="1">
+                        <button class="btn-add" type="submit" formaction="/add">追加</button>
+                        <button class="btn-reduce" type="submit" formaction="/reduce">減算</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        const tbody = document.querySelector("#inventory-table tbody");
+
+        // ページ読み込み時の元の行順を保存しておく
+        const originalRows = Array.from(tbody.rows).map(function(row) { return row; });
+
+        // 整列の状態: "asc" → "desc" → "reset" → "asc" → ...
+        let currentCol   = -1;
+        let currentState = "reset"; // 初期状態はリセット済み
+
+        // 整列できるすべてのヘッダーにクリックイベントを設定する
+        document.querySelectorAll("th.sortable").forEach(function(th) {
+            th.addEventListener("click", function() {
+                const col  = parseInt(th.dataset.col);
+                const type = th.dataset.type;
+
+                // 同じ列を連続クリックした場合: asc→desc→reset と進む
+                // 別の列をクリックした場合: asc から始める
+                let nextState;
+                if (currentCol === col) {
+                    nextState = (currentState === "asc") ? "desc" : "reset";
+                } else {
+                    nextState = "asc";
+                }
+
+                if (nextState === "reset") {
+                    // 元の順序に戻す
+                    originalRows.forEach(function(row) { tbody.appendChild(row); });
+                } else {
+                    const asc  = (nextState === "asc");
+                    const rows = Array.from(tbody.rows);
+
+                    rows.sort(function(a, b) {
+                        const aVal = a.cells[col].dataset.value || a.cells[col].textContent.trim();
+                        const bVal = b.cells[col].dataset.value || b.cells[col].textContent.trim();
+
+                        if (type === "num") {
+                            return asc ? parseFloat(aVal) - parseFloat(bVal)
+                                       : parseFloat(bVal) - parseFloat(aVal);
+                        } else {
+                            return asc ? aVal.localeCompare(bVal, "ja")
+                                       : bVal.localeCompare(aVal, "ja");
+                        }
+                    });
+
+                    rows.forEach(function(row) { tbody.appendChild(row); });
+                }
+
+                // ヘッダーのマーク(▲▼↕)を更新する
+                document.querySelectorAll("th.sortable").forEach(function(t) {
+                    t.classList.remove("sort-asc", "sort-desc");
+                });
+                if (nextState === "asc")  th.classList.add("sort-asc");
+                if (nextState === "desc") th.classList.add("sort-desc");
+
+                // 状態を保存する
+                currentCol   = (nextState === "reset") ? -1 : col;
+                currentState = nextState;
+            });
+        });
+    </script>
 </body>
 </html>
