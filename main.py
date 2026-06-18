@@ -4,6 +4,8 @@ import sys
 # 出力時の文字コードをUTF-8にする(日本語の文字化け対策)
 sys.stdout.reconfigure(encoding="utf-8")
 
+# --- 関数定義 ---
+
 # 在庫一覧を表示する関数
 def show_inventory(inventory):
     print("--- 在庫一覧 ---")
@@ -28,13 +30,6 @@ def add_to_stock(inventory):
             return
 
     print("該当する商品が見つかりませんでした。")
-
-# inventory.csvを読み込んで、リストに保存する
-inventory = []
-with open("inventory.csv", encoding="utf-8") as f:
-    reader = csv.DictReader(f)
-    for row in reader:
-        inventory.append(row)
 
 # 販売数だけ在庫を減らす関数
 def reduce_stock(inventory):
@@ -65,14 +60,34 @@ def save_to_csv(inventory):
         writer.writerows(inventory)
     print("CSVに保存しました。")
 
-# 操作前の在庫一覧を表示する
-show_inventory(inventory)
+# --- メイン処理 ---
 
-# 在庫を減らす
-reduce_stock(inventory)
+# inventory.csvを読み込んで、リストに保存する
+inventory = []
+with open("inventory.csv", encoding="utf-8") as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        inventory.append(row)
 
-# 操作後の在庫一覧を表示する
-show_inventory(inventory)
+# メニューをループで繰り返し表示する
+while True:
+    print("\n--- メニュー ---")
+    print("1: 在庫一覧を表示する")
+    print("2: 在庫を追加する")
+    print("3: 在庫を減らす")
+    print("4: 終了する")
+    choice = input("番号を入力してください: ")
 
-# CSVに保存する
-save_to_csv(inventory)
+    if choice == "1":
+        show_inventory(inventory)
+    elif choice == "2":
+        add_to_stock(inventory)
+        save_to_csv(inventory)
+    elif choice == "3":
+        reduce_stock(inventory)
+        save_to_csv(inventory)
+    elif choice == "4":
+        print("終了します。")
+        break
+    else:
+        print("1〜4の番号を入力してください。")
