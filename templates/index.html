@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Fluppi 在庫管理</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+        th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+        th { background-color: #f0f0f0; }
+        .warning { color: red; font-weight: bold; }
+        form { margin-bottom: 30px; }
+        input { padding: 6px; margin: 4px; }
+        button { padding: 6px 16px; background-color: #4a90d9; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Fluppi 在庫管理</h1>
+
+    <!-- 検索フォーム -->
+    <form method="GET" action="/">
+        <input type="text" name="q" placeholder="商品名・カラーで検索" value="{{ query }}">
+        <button type="submit">検索</button>
+        <a href="/">クリア</a>
+    </form>
+
+    <!-- 在庫一覧テーブル -->
+    <h2>在庫一覧{% if query %} 「{{ query }}」の検索結果{% endif %}</h2>
+    <table>
+        <tr>
+            <th>商品</th>
+            <th>カラー</th>
+            <th>サイズ</th>
+            <th>在庫</th>
+        </tr>
+        {% for row in inventory %}
+        <tr>
+            <td>{{ row.product }}</td>
+            <td>{{ row.color }}</td>
+            <td>{{ row.size }}</td>
+            <td>
+                {{ row.stock }}
+                {% if row.stock | int <= 3 %}
+                <span class="warning">⚠ 再発注が必要です</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <!-- 在庫追加フォーム -->
+    <h2>在庫を追加する</h2>
+    <form method="POST" action="/add">
+        <input type="text" name="product" placeholder="商品名" required>
+        <input type="text" name="color" placeholder="カラー" required>
+        <input type="text" name="size" placeholder="サイズ" required>
+        <input type="number" name="count" placeholder="追加する数" min="1" required>
+        <button type="submit">追加する</button>
+    </form>
+
+    <!-- 在庫減算フォーム -->
+    <h2>在庫を減らす(販売)</h2>
+    <form method="POST" action="/reduce">
+        <input type="text" name="product" placeholder="商品名" required>
+        <input type="text" name="color" placeholder="カラー" required>
+        <input type="text" name="size" placeholder="サイズ" required>
+        <input type="number" name="count" placeholder="販売した数" min="1" required>
+        <button type="submit" style="background-color: #e05c5c;">減らす</button>
+    </form>
+
+    <!-- フラッシュメッセージ(操作結果の表示) -->
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <p style="color: green;">{{ messages[0] }}</p>
+    {% endif %}
+    {% endwith %}
+
+</body>
+</html>
